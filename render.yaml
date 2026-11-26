@@ -1,0 +1,36 @@
+services:
+  # Express API: stores the one Page document. Saving requires EDIT_CODE.
+  - type: web
+    name: my-page-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB_NAME
+        value: my-page
+      - key: EDIT_CODE
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+
+  # Static front-end (Vite + React). Viewing is public; editing is
+  # unlocked with the edit code and checked by the API on save.
+  - type: web
+    name: my-page
+    env: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Update this if your API service ends up with a different name/URL.
+      - key: VITE_API_URL
+        value: https://my-page-api.onrender.com/api
+      # Optional: Cloudinary uploads (unsigned preset). Leave unset in the
+      # dashboard to keep uploads off — pasting links still works.
+      - key: VITE_CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: VITE_CLOUDINARY_UPLOAD_PRESET
+        sync: false
