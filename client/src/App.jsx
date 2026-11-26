@@ -141,6 +141,11 @@ export default function App() {
     setCodePrompt(true);
   };
 
+  const forgetCode = useCallback(() => {
+    sessionStorage.removeItem(CODE_KEY);
+    setEditCode('');
+  }, []);
+
   const save = async () => {
     if (!page) return;
     setSaveState('saving');
@@ -160,8 +165,7 @@ export default function App() {
       setSaveError(err.message || 'Saving failed.');
       if (err.status === 401) {
         // Wrong code: forget it and ask again.
-        sessionStorage.removeItem(CODE_KEY);
-        setEditCode('');
+        forgetCode();
       }
     }
   };
@@ -383,6 +387,9 @@ export default function App() {
                   onDelete={() => deleteBlock(block.id)}
                   isFirst={i === 0}
                   isLast={i === page.blocks.length - 1}
+                  editCode={editCode}
+                  onRequestCode={changeCode}
+                  onCodeRejected={forgetCode}
                 />
               </div>
             ) : (
@@ -408,7 +415,7 @@ export default function App() {
             <h2>Editing is locked</h2>
             <p>
               Type the edit code you chose for this page. It’s checked on the server when you
-              save — it never lives in the website itself.
+              save or upload — it never lives in the website itself.
             </p>
             <input
               type="password"
@@ -432,7 +439,7 @@ export default function App() {
                 Cancel
               </button>
               <button type="button" className="dbtn primary" onClick={confirmCode} disabled={!codeDraft.trim()}>
-                Start designing
+                {pendingDesign.current ? 'Start designing' : 'Unlock'}
               </button>
             </div>
           </div>

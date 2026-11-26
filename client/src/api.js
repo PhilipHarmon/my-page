@@ -33,26 +33,45 @@ export async function savePage(page, editCode) {
   return res.json();
 }
 
-// --- Optional photo/video uploads via Cloudinary (unsigned preset) -------
-// Same pattern as Photo Journal: the browser uploads straight to
-// Cloudinary and only the resulting URL is stored in the block. When the
-// two env vars are not set, uploads are off and link-pasting still works.
+// --- Photo/video uploads ---------------------------------------------------
+// Files upload to this page's own API (POST /api/media), which stores
+// them in the same MongoDB as the page itself — no third-party storage,
+// no extra accounts, no settings to configure. Uploading requires the
+// edit code, exactly like saving. The block stores only the returned
+// media URL.
 
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
-
-export const uploadsEnabled = Boolean(CLOUD_NAME && UPLOAD_PRESET);
-
-export async function uploadToCloudinary(file, resourceType) {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('upload_preset', UPLOAD_PRESET);
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,
-    { method: 'POST', body: form },
-  );
-  if (!res.ok) throw new Error('Upload failed — check the file and try again.');
-  const data = await res.json();
-  if (!data.secure_url) throw new Error('Upload finished but returned no link.');
-  return data.secure_url;
+export function uploadMedia(file, editCode, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/media`);
+    xhr.setRequestHeader('x-edit-code', editCode || '');
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let data = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data && data.id) {
+        // API_URL already ends in /api, locally and on Render alike, so
+        // the stored URL is absolute and works from any origin.
+        resolve(`${API_URL.replace(/\/+$/, '')}/media/${data.id}`);
+        return;
+      }
+      const err = new Error(
+        (data && data.error) || `Upload failed (${xhr.status})`,
+      );
+      err.status = xhr.status;
+      reject(err);
+    };
+    xhr.onerror = () => reject(new Error('Upload failed — check your connection and try again.'));
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
 }

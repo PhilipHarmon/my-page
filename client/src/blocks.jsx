@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import { uploadToCloudinary, uploadsEnabled } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { uploadMedia } from './api';
 import { normalizeMediaUrl } from './media';
+
+// Keep in step with the server cap in server/routes/media.js.
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 // Split text into paragraphs: a blank line starts a new paragraph.
 export function paragraphs(text) {
@@ -99,10 +102,12 @@ export function BlockView({ block }) {
 
 // ------------------------- Design-mode editor -----------------------------
 
-function MediaFields({ block, onChange, resourceType }) {
+function MediaFields({ block, onChange, resourceType, editCode, onRequestCode, onCodeRejected }) {
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const pendingFile = useRef(null);
 
   const media = normalizeMediaUrl(block.url, resourceType);
   const linkHint =
@@ -112,17 +117,52 @@ function MediaFields({ block, onChange, resourceType }) {
 
   async function uploadFile(file) {
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('That file is over the 100 MB upload limit.');
+      return;
+    }
+    if (!editCode) {
+      // Editing isn't unlocked yet: ask for the code first (the upload
+      // runs automatically once it's entered) instead of failing.
+      pendingFile.current = file;
+      setUploadError('');
+      if (typeof onRequestCode === 'function') onRequestCode();
+      return;
+    }
     setUploading(true);
+    setProgress(null);
     setUploadError('');
     try {
-      const url = await uploadToCloudinary(file, resourceType);
+      const url = await uploadMedia(file, editCode, setProgress);
       onChange({ url });
     } catch (err) {
+      if (err.status === 401 && typeof onCodeRejected === 'function') {
+        // Wrong code: forget it, like a failed save does, so the next
+        // attempt asks again.
+        onCodeRejected();
+      }
       setUploadError(err.message || 'Upload failed.');
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
+
+  // An upload that was waiting on the edit code runs as soon as a code
+  // exists (the unlock prompt lives in App and updates the prop).
+  useEffect(() => {
+    if (editCode && pendingFile.current) {
+      const file = pendingFile.current;
+      pendingFile.current = null;
+      uploadFile(file);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCode]);
+
+  // Don't let a stale picked file upload into a different block later.
+  useEffect(() => () => {
+    pendingFile.current = null;
+  }, []);
 
   function handleFile(event) {
     const file = event.target.files && event.target.files[0];
@@ -133,7 +173,6 @@ function MediaFields({ block, onChange, resourceType }) {
   function handleDrop(event) {
     event.preventDefault();
     setDragging(false);
-    if (!uploadsEnabled) return;
     const file = event.dataTransfer.files && event.dataTransfer.files[0];
     uploadFile(file);
   }
@@ -141,34 +180,39 @@ function MediaFields({ block, onChange, resourceType }) {
   return (
     <>
       <p className="media-route-label">Upload from this device</p>
-      {uploadsEnabled ? (
-        <div
-          className={`media-drop${dragging ? ' dragging' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-        >
-          <label className="field">
-            <span>{dragging ? 'Drop the file to upload it' : 'Choose a file, or drop one here'}</span>
-            <input
-              type="file"
-              accept={resourceType === 'video' ? 'video/*' : 'image/*'}
-              onChange={handleFile}
-            />
-            {uploading ? <span className="field-note">Uploading…</span> : null}
-            {uploadError ? <span className="field-error">{uploadError}</span> : null}
-          </label>
-          <p className="field-note">
-            On iPhone or Mac the picker opens the Files app — you can pick photos and videos from
-            iCloud Drive or the Google Drive app there too.
-          </p>
-        </div>
-      ) : (
-        <p className="field-note">Uploads aren’t set up yet — pasting a link below works fine.</p>
-      )}
+      <div
+        className={`media-drop${dragging ? ' dragging' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
+        <label className="field">
+          <span>{dragging ? 'Drop the file to upload it' : 'Choose a file, or drop one here'}</span>
+          <input
+            type="file"
+            accept={resourceType === 'video' ? 'video/*' : 'image/*'}
+            onChange={handleFile}
+            disabled={uploading}
+          />
+          {uploading ? (
+            <span className="field-note">
+              Uploading…{progress !== null ? ` ${progress}%` : ''}
+            </span>
+          ) : null}
+          {uploadError ? <span className="field-error">{uploadError}</span> : null}
+        </label>
+        <p className="field-note">
+          On iPhone or Mac the picker opens the Files app — you can pick photos and videos from
+          iCloud Drive or the Google Drive app there too.
+        </p>
+        <p className="field-note">
+          Files up to 100 MB. Uploads live in the page’s own database, so photos and short
+          clips suit it best — long videos are better as a YouTube or Drive link below.
+        </p>
+      </div>
 
       <p className="media-route-label">Paste a link</p>
       <label className="field">
@@ -207,7 +251,18 @@ const TYPE_LABELS = {
 
 const ALIGNABLE = ['heading', 'paragraph', 'quote', 'link'];
 
-export function BlockEditor({ block, onChange, onMove, onDuplicate, onDelete, isFirst, isLast }) {
+export function BlockEditor({
+  block,
+  onChange,
+  onMove,
+  onDuplicate,
+  onDelete,
+  isFirst,
+  isLast,
+  editCode,
+  onRequestCode,
+  onCodeRejected,
+}) {
   return (
     <div className="block-editor">
       <div className="editor-head">
@@ -280,11 +335,25 @@ export function BlockEditor({ block, onChange, onMove, onDuplicate, onDelete, is
         )}
 
         {block.type === 'photo' && (
-          <MediaFields block={block} onChange={onChange} resourceType="image" />
+          <MediaFields
+            block={block}
+            onChange={onChange}
+            resourceType="image"
+            editCode={editCode}
+            onRequestCode={onRequestCode}
+            onCodeRejected={onCodeRejected}
+          />
         )}
 
         {block.type === 'video' && (
-          <MediaFields block={block} onChange={onChange} resourceType="video" />
+          <MediaFields
+            block={block}
+            onChange={onChange}
+            resourceType="video"
+            editCode={editCode}
+            onRequestCode={onRequestCode}
+            onCodeRejected={onCodeRejected}
+          />
         )}
 
         {block.type === 'quote' && (

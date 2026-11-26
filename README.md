@@ -18,11 +18,17 @@ server-side. The code never appears in the client code or this repo.
 
 - `client/` — React + Vite single-page app (the page, both modes).
 - `server/` — Node + Express + Mongoose API. One `Page` document holds
-  everything. Endpoints:
+  the page; uploaded media files live in a GridFS bucket in the same
+  database. Endpoints:
   - `GET /api/health` — always answers, database or not.
   - `GET /api/page` — public, returns the page.
   - `PUT /api/page` — saves; requires the `x-edit-code` header to match
     `EDIT_CODE`.
+  - `POST /api/media` — uploads one photo or video file (multipart field
+    `file`); requires the same `x-edit-code` header. Images and videos
+    only, up to **100 MB** per file.
+  - `GET /api/media/:id` — public; streams a stored file with its
+    content type and HTTP Range support, so videos play and seek.
 - `render.yaml` — Render blueprint for both services.
 
 ## Local development
@@ -53,25 +59,28 @@ persists in MongoDB.
 
 ## Photos & videos
 
-## Photos & videos
-
 Two ways in:
 
 - **Upload from this device** — pick a file or drag-and-drop it onto the
-  block editor. Uploads use Cloudinary with an unsigned preset — the
-  same pattern as Photo Journal. Set `VITE_CLOUDINARY_CLOUD_NAME` and
-  `VITE_CLOUDINARY_UPLOAD_PRESET` on the client to turn uploads on;
-  leave them unset and uploads hide themselves while links keep
-  working. On iPhone or Mac the file picker opens the Files app, so
-  photos and videos living in iCloud Drive or the Google Drive app are
-  reachable there — that's the route for iCloud, since iCloud share
-  links can't be embedded on a web page.
+  block editor. The file uploads to the page's own API and is stored in
+  the same MongoDB as the page (GridFS) — no third-party storage, no
+  extra accounts, and nothing to configure: if the page itself works,
+  uploads work. Uploading asks for the edit code, like saving. On
+  iPhone or Mac the file picker opens the Files app, so photos and
+  videos living in iCloud Drive or the Google Drive app are reachable
+  there — that's the route for iCloud, since iCloud share links can't
+  be embedded on a web page.
 - **Paste a link** — Google Drive share links are converted
   automatically (photos display directly, videos embed), Dropbox share
   links become direct files, YouTube and Vimeo links become embedded
   players, and direct image/video file links work as-is. iCloud share
   links are detected and explained in the editor rather than saved as
   broken embeds.
+
+**Storage limits, honestly:** uploads are capped at **100 MB per
+file**, and an Atlas free-tier cluster holds **512 MB in total** — so
+database uploads suit photos and short clips. Long or large videos
+belong on YouTube or Google Drive, added with paste-a-link above.
 
 ## Deploying
 

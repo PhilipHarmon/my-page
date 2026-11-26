@@ -1,7 +1,7 @@
-const crypto = require('crypto');
 const express = require('express');
 const Page = require('../models/Page');
 const { dbReady } = require('../config/db');
+const { requireEditCode } = require('./editCode');
 
 const router = express.Router();
 
@@ -94,15 +94,6 @@ function normalizePage(input) {
   };
 }
 
-function codesMatch(given) {
-  const expected = process.env.EDIT_CODE || '';
-  if (!expected || typeof given !== 'string' || !given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
 // GET /api/page — public. Anyone with the link can view the finished page.
 router.get('/page', async (_req, res) => {
   if (!dbReady()) {
@@ -124,18 +115,9 @@ router.get('/page', async (_req, res) => {
 });
 
 // PUT /api/page — saving requires the edit code (header: x-edit-code),
-// checked here on the server. The code never ships in the client bundle.
-router.put('/page', async (req, res) => {
-  if (!process.env.EDIT_CODE) {
-    return res
-      .status(503)
-      .json({ error: 'Editing is not set up on the server yet (EDIT_CODE is missing).' });
-  }
-  if (!codesMatch(req.get('x-edit-code'))) {
-    return res
-      .status(401)
-      .json({ error: 'That edit code did not match — your changes were not saved.' });
-  }
+// checked on the server by requireEditCode. The code never ships in the
+// client bundle.
+router.put('/page', requireEditCode, async (req, res) => {
   if (!dbReady()) {
     return res.status(503).json({ error: 'Database unavailable — your changes could not be saved.' });
   }

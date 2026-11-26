@@ -26,11 +26,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       # Update this if your API service ends up with a different name/URL.
+      # Uploads need no variables at all: files go through the API and
+      # are stored in the same MongoDB as the page.
       - key: VITE_API_URL
         value: https://my-page-api.onrender.com/api
-      # Optional: Cloudinary uploads (unsigned preset). Leave unset in the
-      # dashboard to keep uploads off — pasting links still works.
-      - key: VITE_CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: VITE_CLOUDINARY_UPLOAD_PRESET
-        sync: false
