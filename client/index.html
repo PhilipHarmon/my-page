@@ -6,6 +6,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>My Page</title>
     <meta name="description" content="A personal page, designed and redesigned by its owner — words, photos and videos in whatever layout feels right." />
+    <!-- Social preview card (Open Graph + Twitter). The image is served by
+         the API — its address is known and stable — so these tags never
+         depend on this site's own URL. No og:url on purpose: Facebook
+         treats the URL actually shared as the canonical one. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="My Page" />
+    <meta property="og:description" content="A personal page, designed and redesigned by its owner — words, photos and videos in whatever layout feels right." />
+    <meta property="og:image" content="https://my-page-api.onrender.com/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="My Page" />
+    <meta name="twitter:description" content="A personal page, designed and redesigned by its owner — words, photos and videos in whatever layout feels right." />
+    <meta name="twitter:image" content="https://my-page-api.onrender.com/og-card.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

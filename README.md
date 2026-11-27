@@ -82,6 +82,18 @@ file**, and an Atlas free-tier cluster holds **512 MB in total** — so
 database uploads suit photos and short clips. Long or large videos
 belong on YouTube or Google Drive, added with paste-a-link above.
 
+## Social preview card
+
+When the page's link is shared (Facebook, texts, etc.), the preview
+card comes from the Open Graph / Twitter tags in `client/index.html`.
+The card image itself is served by the **API** at
+`GET /og-card.png` (file: `server/assets/og-card.png`, design source:
+`server/assets/og-card.svg`) — the API's address is known and stable,
+so the tags never depend on the client site's own URL. There is
+deliberately **no `og:url`**: the URL actually shared stays canonical.
+After a redesign of the card, re-scrape once in Facebook's Sharing
+Debugger to refresh its cache.
+
 ## Deploying
 
 Deploys to Render from the blueprint in `render.yaml` — see the build
